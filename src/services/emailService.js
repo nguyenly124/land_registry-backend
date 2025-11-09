@@ -53,7 +53,8 @@ const createAndNotify = async (io, accountId, message, hoso_id = null, sendEmail
   try {
     const notification = await Notification.create({
       account_id: accountId,
-      message: message.trim(),
+      message: message,
+      // is_read: false,
       hoso_id: hoso_id || null
     });
 
