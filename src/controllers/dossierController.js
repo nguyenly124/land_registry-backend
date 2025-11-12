@@ -196,8 +196,6 @@ exports.requestSupplement = async (req, res) => {
 };
 //2. DUYỆT HỒ SƠ (CÓ CHUYỂN NHƯỢNG → BLOCKCHAIN)
 exports.approveHoSo = async (req, res) => {
-  console.log('API được gọi');
-  console.log('Dữ liệu nhận được:',req.params);
   let t;
   const io = req.app.get('io');
   try {
@@ -543,7 +541,7 @@ exports.getAllHoSo = async (req, res) => {
 // Lấy danh sách hồ sơ liên quan đến thửa đất
 exports.getByParcelCode = async (req, res) => {
   try {
-    console.log('ham get duoc goi ')
+    
     const { parcel_id } = req.params;
     const { role, id: userId } = req.user;
     // === KIỂM TRA ĐẦU VÀO ===
@@ -637,7 +635,7 @@ exports.getHoSoDetails = async (req, res) => {
         {
           model: HoSoDocument,
           as: 'HoSoDocuments',
-          attributes: ['doc_id', 'doc_name', 'cloudinary_url', 'ipfs_hash', 'uploaded_at']
+          attributes: ['doc_id', 'doc_name', 'file_path', 'ipfs_hash', 'uploaded_at']
         },
         { model: Account, as: 'account', include: [{ model: UserProfile, as: 'UserProfile' }] },
         { model: LandParcel, as: 'parcel' },

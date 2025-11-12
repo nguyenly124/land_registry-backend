@@ -30,6 +30,7 @@ exports.registerSchema = Joi.object({
 exports.loginSchema = Joi.object({
   username: Joi.string().trim().required().messages(customMessages).label('Tên đăng nhập'),
   password: Joi.string().required().messages(customMessages).label('Mật khẩu'),
+  turnstile_token: Joi.string().optional().allow(null, '').label("Turnstile_token")
 }).messages(customMessages);
 
 // Schema cho chức năng Đổi mật khẩu 

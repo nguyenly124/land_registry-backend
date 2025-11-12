@@ -17,7 +17,7 @@ async function submitDossier(dossierId, ipfsHash) {
 
 async function transferOwnership(parcelCode, newOwnerAddress, ipfsHash) {
   try {
-    console.log('[ETH] Gọi contract.transferOwnership:', { parcelCode, newOwnerAddress, ipfsHash });
+    // console.log('[ETH] Gọi contract.transferOwnership:', { parcelCode, newOwnerAddress, ipfsHash });
 
     // Gửi giao dịch
     const tx = await contract.transferOwnership(parcelCode, newOwnerAddress, ipfsHash);

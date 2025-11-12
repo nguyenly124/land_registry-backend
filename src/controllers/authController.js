@@ -59,67 +59,78 @@ exports.login = async (req, res) => {
   try {
     const { username, password, turnstile_token } = req.body;
 
-    // === 1. Tìm tài khoản ===
-    const account = await Account.findOne({ where: { username } });
+    // === 1. TÌM TÀI KHOẢN MỚI NHẤT ===
+    let account = await Account.findOne({ where: { username } });
     if (!account) {
-      return res.status(401).json({ message: "Tên đăng nhập hoặc mật khẩu không đúng." });
-    }
-
-    // === 2. Kiểm tra khóa tài khoản ===
-    if (account.lock_until && new Date() < account.lock_until) {
-      const minutesLeft = Math.ceil((new Date(account.lock_until) - new Date()) / 60000);
-      return res.status(429).json({
-        message: `Tài khoản bị khóa ${minutesLeft} phút.`,
+      return res.status(401).json({
+        message: "Tên đăng nhập hoặc mật khẩu không đúng.",
+        requireTurnstile: true,
       });
     }
 
-    // === 3. KIỂM TRA MẬT KHẨU ===
-    const isMatch = await bcrypt.compare(password, account.password);
+    // === 2. KIỂM TRA KHÓA TÀI KHOẢN (20 PHÚT) ===
+    if (account.lock_until && new Date() < account.lock_until) {
+      const minutesLeft = Math.ceil((account.lock_until - new Date()) / 60000);
+      return res.status(429).json({
+        message: `Tài khoản bị khóa ${minutesLeft} phút do nhập sai quá nhiều lần.`,
+        requireTurnstile: true,
+      });
+    }
 
+    // === 3. LUÔN YÊU CẦU TURNSTILE  ===
+    if (!turnstile_token) {
+      return res.status(400).json({
+        message: "Vui lòng xác minh bạn không phải robot.",
+        requireTurnstile: true,
+        failedAttempts: account.failed_attempts || 0,
+      });
+    }
+
+    // === 4. XÁC THỰC TURNSTILE ===
+    const result = await verifyTurnstile(turnstile_token);
+    if (!result.success) {
+      return res.status(400).json({
+        message: "Xác minh thất bại. Vui lòng thử lại.",
+        requireTurnstile: true,
+        failedAttempts: account.failed_attempts || 0,
+      });
+    }
+
+    // === 5. ĐỌC failedAttempts SAU KHI PASS TURNSTILE ===
+    let failedAttempts = account.failed_attempts || 0;
+
+    // === 6. KIỂM TRA MẬT KHẨU ===
+    const isMatch = await bcrypt.compare(password, account.password);
     if (!isMatch) {
-      // === MẬT KHẨU SAI → TĂNG failed_attempts ===
-      const newAttempts = (account.failed_attempts || 0) + 1;
-      const lockUntil = newAttempts >= 10 ? new Date(Date.now() + 30 * 60 * 1000) : null;
+      failedAttempts++;
+
+      // KHÓA 20 PHÚT KHI SAI LẦN THỨ 6
+      const lockUntil = failedAttempts >= 6 ? new Date(Date.now() + 20 * 60 * 1000) : null;
 
       await account.update({
-        failed_attempts: newAttempts,
+        failed_attempts: failedAttempts,
         lock_until: lockUntil,
       });
 
-      // === SAI ≥ 5 LẦN → YÊU CẦU TURNSTILE ===
-      if (newAttempts >= 5) {
-        if (!turnstile_token) {
-          return res.status(400).json({
-            message: "Vui lòng xác minh bạn không phải robot.",
-            requireTurnstile: true,
-            failedAttempts: newAttempts,
-          });
-        }
+      // TÌM LẠI TỪ DB
+      account = await Account.findOne({ where: { username } });
+      failedAttempts = account.failed_attempts || 0;
 
-        const turnstileResult = await verifyTurnstile(turnstile_token);
-        if (!turnstileResult.success) {
-          return res.status(400).json({
-            message: "Xác minh thất bại. Vui lòng thử lại.",
-            requireTurnstile: true,
-            failedAttempts: newAttempts,
-          });
-        }
-      }
-
-      if (newAttempts >= 10) {
+      if (failedAttempts >= 6) {
         return res.status(429).json({
-          message: "Tài khoản bị khóa 30 phút do nhập sai quá nhiều lần.",
+          message: "Tài khoản bị khóa 20 phút do nhập sai quá nhiều lần.",
+          requireTurnstile: true,
         });
       }
 
       return res.status(401).json({
         message: "Tên đăng nhập hoặc mật khẩu không đúng.",
-        failedAttempts: newAttempts,
-        requireTurnstile: newAttempts >= 5,
+        failedAttempts,
+        requireTurnstile: true,
       });
     }
 
-    // === MẬT KHẨU ĐÚNG → RESET + ĐĂNG NHẬP ===
+    // === 7. ĐĂNG NHẬP THÀNH CÔNG → RESET ===
     await account.update({
       failed_attempts: 0,
       lock_until: null,
@@ -132,7 +143,7 @@ exports.login = async (req, res) => {
       { expiresIn: JWT_EXPIRES_IN }
     );
 
-    res.json({
+    return res.json({
       message: "Đăng nhập thành công.",
       token,
       user: {
@@ -142,8 +153,11 @@ exports.login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Lỗi đăng nhập:', error);
-    res.status(500).json({ message: "Lỗi server." });
+    console.error("Lỗi đăng nhập:", error);
+    return res.status(500).json({ 
+      message: "Lỗi server.",
+      requireTurnstile: true,
+    });
   }
 };
 // Reset mật khẩu
