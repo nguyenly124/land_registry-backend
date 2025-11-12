@@ -45,6 +45,23 @@ module.exports = function(sequelize, DataTypes) {
     receiver_info: {
       type: DataTypes.JSONB,
       allowNull: true
+    },
+    blockchain_synced: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false
+    },
+    last_blockchain_action: {
+      type: DataTypes.STRING(100),
+      allowNull: true
+    },
+    blockchain_tx_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'BlockchainTransaction',
+        key: 'transaction_id'
+      }
     }
   }, {
     sequelize,

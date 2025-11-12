@@ -32,12 +32,22 @@ router.put('/cancel/:hoso_id', authMiddleware, validate(cancelHoSoSchema,"params
 // Lưu ý: searchSchema được validate bằng req.query thay vì req.body
 // Bạn có thể cần một middleware validate riêng cho req.query
 router.get('/search', validate(searchSchema), dossierController.searchHoSo);
+
 router.get('/getHoSoDetails',validate())
+
 router.get('/getdetail/:id',authMiddleware,dossierController.getHoSoDetails)
+
 router.get('/getall',authMiddleware,dossierController.getAllHoSo)
+
+router.get('/land/:parcel_id', authMiddleware,dossierController.getByParcelCode);
+
 router.patch('/:hosoId/confirm', authMiddleware,dossierController.confirmProcessing);
+
 router.patch('/:hosoId/supplement',authMiddleware, dossierController.requestSupplement);
+
 router.patch('/:hosoId/approve',authMiddleware, dossierController.approveHoSo);
+
 router.patch('/:hosoId/reject', authMiddleware,dossierController.rejectHoSo);
+
 router.get('/history/:hoso_id',authMiddleware,hosoHistoryController.getHistoryByHosoId)
 module.exports = router;

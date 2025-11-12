@@ -27,6 +27,28 @@ module.exports = function(sequelize, DataTypes) {
       type: DataTypes.DATE,
       allowNull: true,
       defaultValue: Sequelize.Sequelize.literal('CURRENT_TIMESTAMP')
+    },
+    cloudinary_url: {
+      type: DataTypes.STRING(500),
+      allowNull: true
+    },
+    cloudinary_public_id: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    ipfs_hash: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    ipfs_uploaded: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false
+    },
+    blockchain_synced: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false
     }
   }, {
     sequelize,

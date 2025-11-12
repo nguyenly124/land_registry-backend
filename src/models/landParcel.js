@@ -51,6 +51,19 @@ module.exports = function(sequelize, DataTypes) {
     longitude: {
       type: DataTypes.DECIMAL,
       allowNull: true
+    },
+    current_owner_blockchain: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false
+    },
+    ownership_blockchain_tx_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'BlockchainTransaction',
+        key: 'transaction_id'
+      }
     }
   }, {
     sequelize,

@@ -4,14 +4,14 @@ const { validate } = require('../middlewares/validateMiddleware');
 const authMiddleware = require('../middlewares/authMiddleware');
 const passwordExpiryMiddleware=require('../middlewares/passwordExpiryMiddleware');
 const userController = require('../controllers/userController');
-const {uploadCloud}= require('../middlewares/cloudinaryUpload')
+const {uploadAvatar}= require('../middlewares/cloudinaryUpload')
 const { 
   createStaffAccountSchema,
   updateProfileSchema,
   changePasswordSchema,
  
 } = require('../validators/authSchema');
-const renameField = require('../middlewares/renameField');
+
 
 router.use(authMiddleware,passwordExpiryMiddleware);
 // @route   POST /api/auth/create-staff
@@ -36,7 +36,7 @@ router.put('/changePassword',authMiddleware,validate(changePasswordSchema),userC
 router.post(
   "/upload-avatar",
   authMiddleware,
-  uploadCloud.single("avatar"),
+  uploadAvatar.single("avatar"),
   userController.uploadAvatar
 );
 

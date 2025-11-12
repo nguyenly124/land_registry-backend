@@ -27,6 +27,27 @@ module.exports = function(sequelize, DataTypes) {
     action: {
       type: DataTypes.STRING(100),
       allowNull: false
+    },
+    block_number: {
+      type: DataTypes.BIGINT,
+      allowNull: true
+    },
+    from_address: {
+      type: DataTypes.STRING(42),
+      allowNull: true
+    },
+    ipfs_hash: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    status: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      defaultValue: "PENDING"
+    },
+    error_message: {
+      type: DataTypes.TEXT,
+      allowNull: true
     }
   }, {
     sequelize,
@@ -40,6 +61,12 @@ module.exports = function(sequelize, DataTypes) {
         unique: true,
         fields: [
           { name: "transaction_id" },
+        ]
+      },
+      {
+        name: "idx_blockchain_hoso_id",
+        fields: [
+          { name: "hoso_id" },
         ]
       },
     ]
