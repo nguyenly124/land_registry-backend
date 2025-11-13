@@ -33,6 +33,7 @@ router.put('/cancel/:hoso_id', authMiddleware, validate(cancelHoSoSchema,"params
 // Bạn có thể cần một middleware validate riêng cho req.query
 router.get('/search', validate(searchSchema), dossierController.searchHoSo);
 
+//Lấy chi tiết hồ sơ
 router.get('/getHoSoDetails',validate())
 
 router.get('/getdetail/:id',authMiddleware,dossierController.getHoSoDetails)
