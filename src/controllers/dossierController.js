@@ -1,4 +1,5 @@
 const { initModels } = require('../models/init-models');
+const { Op } = require('sequelize');
 const { sequelize } = require('../config/db');
 const { emit } = require('../utils/NotificationEvent');
 const bcrypt = require('bcryptjs');
@@ -500,42 +501,133 @@ exports.cancelHoSo = async (req, res) => {
     res.status(500).json({ message: 'Đã có lỗi xảy ra.' });
   }
 };
-// Hàm lấy tất cả hồ sơ
 exports.getAllHoSo = async (req, res) => {
   try {
     const { role, id: userId } = req.user;
+
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+    const status = req.query.status?.toString().trim();
+    const search = req.query.search?.toString().trim();
     const offset = (page - 1) * limit;
 
-    const where = role === 'Cán bộ' ? {} : { account_id: userId };
+    const where = {};
+    if (role !== 'Cán bộ') {
+      where.account_id = userId;
+    }
 
-    const { count, rows } = await HoSo.findAndCountAll({
+    if (status && ['Chờ xử lý', 'Đang xử lý', 'Đã duyệt', 'Từ chối'].includes(status)) {
+      where.status = status;
+    }
+
+    if (search) {
+      const like = `%${search}%`;
+      where[Op.or] = [
+        sequelize.where(sequelize.cast(sequelize.col('HoSo.hoso_id'), 'TEXT'), { [Op.like]: like }),
+        sequelize.where(sequelize.cast(sequelize.col('HoSo.type'), 'TEXT'), { [Op.like]: like }),
+        { '$account.username$': { [Op.like]: like } },
+        { '$account->UserProfile.full_name$': { [Op.like]: like } },
+        { '$parcel.parcel_code$': { [Op.like]: like } },
+        { '$parcel.address$': { [Op.like]: like } }
+      ];
+    }
+
+    // === ĐẾM – BẮT BUỘC PHẢI CÓ UserProfile ===
+    const count = await HoSo.count({
+      where,
+      distinct: true,
+      col: 'hoso_id',
+      include: [
+        { 
+          model: Account, 
+          as: 'account', 
+          attributes: [],
+          include: [
+            { model: UserProfile, as: 'UserProfile', attributes: [] }
+          ]
+        },
+        { model: LandParcel, as: 'parcel', attributes: [] }
+      ]
+    });
+
+    // === LẤY DỮ LIỆU ===
+    const rows = await HoSo.findAll({
       where,
       offset,
       limit,
       order: [['created_at', 'DESC']],
+      attributes: ['hoso_id', 'type', 'status', 'created_at', 'receiver_info'],
       include: [
-        { model: Account, as: 'account', include: [{ model: UserProfile, as: 'UserProfile' }] },
-        { model: LandParcel, as: 'parcel' },
-        { model: BlockchainTransaction, as: 'BlockchainTransactions', attributes: ['hash_value', 'action'] }
+        {
+          model: Account,
+          as: 'account',
+          attributes: ['username'],
+          include: [{
+            model: UserProfile,
+            as: 'UserProfile',
+            attributes: ['full_name']
+          }]
+        },
+        {
+          model: LandParcel,
+          as: 'parcel',
+          attributes: ['parcel_code', 'address']
+        },
+        {
+          model: BlockchainTransaction,
+          as: 'BlockchainTransactions',
+          attributes: ['hash_value'],
+          separate: true,
+          order: [['transaction_id', 'DESC']],
+          limit: 1
+        }
       ]
     });
 
+    const data = rows.map(h => {
+      const json = h.toJSON();
+      const latestTx = h.BlockchainTransactions?.[0] || {};
+
+      return {
+        hoso_id: json.hoso_id,
+        account: { username: json.account?.username || '—' },
+        type: json.type,
+        parcel: json.parcel ? {
+          parcel_code: json.parcel.parcel_code,
+          address: json.parcel.address
+        } : null,
+        status: json.status,
+        created_at: json.created_at,
+        blockchain_status: h.BlockchainTransactions?.length > 0 ? 'Đã ghi' : 'Chưa ghi',
+        blockchain_link: latestTx.hash_value
+          ? `https://mumbai.polygonscan.com/tx/${latestTx.hash_value}`
+          : null
+      };
+    });
+
+    const totalPages = Math.ceil(count / limit);
+
     res.status(200).json({
       success: true,
-      data: rows.map(h => ({
-        ...h.toJSON(),
-        blockchain_status: h.BlockchainTransactions?.length > 0 ? 'Đã ghi' : 'Chưa ghi',
-        blockchain_link: h.BlockchainTransactions?.[0]?.hash_value
-          ? `https://mumbai.polygonscan.com/tx/${h.BlockchainTransactions[0].hash_value}`
-          : null
-      })),
-      pagination: { total: count, page, limit, totalPages: Math.ceil(count / limit) }
+      message: 'Lấy danh sách hồ sơ thành công',
+      data,
+      count,
+      pagination: {
+        total: count,
+        page,
+        limit,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1
+      }
     });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: 'Lỗi server.' });
+    console.error('Lỗi getAllHoSo:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi server khi lấy danh sách hồ sơ'
+    });
   }
 };
 // Lấy danh sách hồ sơ liên quan đến thửa đất
@@ -637,7 +729,7 @@ exports.getHoSoDetails = async (req, res) => {
           as: 'HoSoDocuments',
           attributes: ['doc_id', 'doc_name', 'file_path', 'ipfs_hash', 'uploaded_at']
         },
-        { model: Account, as: 'account', include: [{ model: UserProfile, as: 'UserProfile' }] },
+        { model: Account, as: 'account',attributes: { exclude: ['password_hash'] }, include: [{ model: UserProfile, as: 'UserProfile' }] },
         { model: LandParcel, as: 'parcel' },
         { model: BlockchainTransaction, as: 'BlockchainTransactions' }
       ]
