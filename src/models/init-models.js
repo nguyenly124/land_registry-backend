@@ -9,6 +9,7 @@ var _LandParcel = require("./landParcel");
 var _LandTransferHistory = require("./landTransferHistory");
 var _Notification = require("./notification");
 var _PasswordHistory = require("./passwordHistory");
+var _Payment = require("./payment");
 var _UserProfile = require("./userProfile");
 var _Otp = require("./otp");
 var _PlayingWithNeon = require("./playingWithNeon");
@@ -25,6 +26,7 @@ function initModels(sequelize) {
   var LandTransferHistory = _LandTransferHistory(sequelize, DataTypes);
   var Notification = _Notification(sequelize, DataTypes);
   var PasswordHistory = _PasswordHistory(sequelize, DataTypes);
+  var Payment = _Payment(sequelize, DataTypes);
   var UserProfile = _UserProfile(sequelize, DataTypes);
   var Otp = _Otp(sequelize, DataTypes);
   var PlayingWithNeon = _PlayingWithNeon(sequelize, DataTypes);
@@ -66,12 +68,16 @@ function initModels(sequelize) {
   HoSo.hasMany(LandTransferHistory, { as: "LandTransferHistories", foreignKey: "hoso_id"});
   Notification.belongsTo(HoSo, { as: "hoso", foreignKey: "hoso_id"});
   HoSo.hasMany(Notification, { as: "Notifications", foreignKey: "hoso_id"});
+  Payment.belongsTo(HoSo, { as: "hoso", foreignKey: "hoso_id"});
+  HoSo.hasMany(Payment, { as: "Payments", foreignKey: "hoso_id"});
   HoSo.belongsTo(LandParcel, { as: "parcel", foreignKey: "parcel_id"});
   LandParcel.hasMany(HoSo, { as: "HoSos", foreignKey: "parcel_id"});
   LandOwnership.belongsTo(LandParcel, { as: "parcel", foreignKey: "parcel_id"});
   LandParcel.hasMany(LandOwnership, { as: "LandOwnerships", foreignKey: "parcel_id"});
   LandTransferHistory.belongsTo(LandParcel, { as: "parcel", foreignKey: "parcel_id"});
   LandParcel.hasMany(LandTransferHistory, { as: "LandTransferHistories", foreignKey: "parcel_id"});
+  HoSo.belongsTo(Payment, { as: "payment", foreignKey: "payment_id"});
+  Payment.hasMany(HoSo, { as: "HoSos", foreignKey: "payment_id"});
 
   return {
     Account,
@@ -84,6 +90,7 @@ function initModels(sequelize) {
     LandTransferHistory,
     Notification,
     PasswordHistory,
+    Payment,
     UserProfile,
     Otp,
     PlayingWithNeon,

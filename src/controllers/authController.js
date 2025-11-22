@@ -142,7 +142,7 @@ exports.login = async (req, res) => {
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     );
-
+    console.log(token);
     return res.json({
       message: "Đăng nhập thành công.",
       token,

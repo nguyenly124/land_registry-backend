@@ -9,7 +9,7 @@ const fileRouter = require('./routes/fileRouter');
 const userRouter = require('./routes/userRouter');
 const dossierRouter = require('./routes/dossierRouter');
 const notificationRouter =require('./routes/notificationRouter');
-
+const paymentRouter = require('./routes/paymentRouter');
 const app = express();
 
 // Middleware
@@ -24,7 +24,7 @@ app.use('/file', fileRouter);
 app.use('/user', userRouter);
 app.use('/dossier', dossierRouter);
 app.use('/notifications',notificationRouter);
-
+app.use("/payment", paymentRouter);
 // Test route
 app.get('/test-db', (req, res) => {
   res.json({ message: 'Connected successfully' });

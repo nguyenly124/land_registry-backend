@@ -1,7 +1,7 @@
 // src/services/documentService.js
 const axios = require('axios');
 const FormData = require('form-data');
-global.FormData = FormData; // Fix cho Node.js < 18
+global.FormData = FormData; 
 
 const { uploadToIPFS } = require('../blockchain/services/ipfsService');
 const { submitDossier } = require('../blockchain/services/ethService');

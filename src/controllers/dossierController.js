@@ -5,6 +5,7 @@ const { emit } = require('../utils/NotificationEvent');
 const bcrypt = require('bcryptjs');
 const { processDocument } = require('../services/documentService');
 const { transferOwnership } = require('../blockchain/services/ethService');
+const {createPayOS, createPayOSInternal} = require('../controllers/paymentController');
 // Khởi tạo models
 const { HoSo, HoSoDocument,LandParcel, UserProfile, Account, HoSoHistory,BlockchainTransaction,LandTransferHistory,LandOwnership } = initModels(sequelize);
 
@@ -61,13 +62,14 @@ exports.submitHoSo = async (req, res) => {
       receiver_info: type === 'Chuyển nhượng' ? receiver_info : null
     }, { transaction: t });
     // === XỬ LÝ TÀI LIỆU (Cloudinary → IPFS → Blockchain) ===
-    if (files && files.length > 0) {
-      for (const file of files) {
-        const result = await processDocument(file, newHoSo.hoso_id);
-        await logBlockchainTx(newHoSo.hoso_id, 'DOCUMENT_SUBMITTED', result.ipfsHash, result.txHash, t);
-      }
-    }
-
+    // if (files && files.length > 0) {
+    //   for (const file of files) {
+    //     const result = await processDocument(file, newHoSo.hoso_id);
+    //     await logBlockchainTx(newHoSo.hoso_id, 'DOCUMENT_SUBMITTED', result.ipfsHash, result.txHash, t);
+    //   }
+    // }
+    const amount = type === 'Đăng ký sử dụng' ? 7000 : 100000;
+    const payosData = await createPayOSInternal(newHoSo.hoso_id, amount, t);
     // === GHI LỊCH SỬ ===
     await logHistory(
       newHoSo.hoso_id,
@@ -91,8 +93,11 @@ exports.submitHoSo = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Nộp hồ sơ thành công.',
-      data: { ...newHoSo.toJSON(), documents_uploaded: files?.length || 0 }
+      message: 'Nộp hồ sơ thành công! Đang chuyển sang thanh toán...',
+      data: {
+        hoso: { ...newHoSo.toJSON() },
+        paymentUrl: payosData.checkoutUrl
+      }
     });
   } catch (error) {
     if (t) await t.rollback();
@@ -100,6 +105,7 @@ exports.submitHoSo = async (req, res) => {
     res.status(500).json({ success: false, message: 'Lỗi server.' });
   }
 };
+//=== Xác nhận xử lý hồ sơ ===
 exports.confirmProcessing = async (req, res) => {
   const t = await sequelize.transaction();
   try {
@@ -193,193 +199,6 @@ exports.requestSupplement = async (req, res) => {
     if (t) await t.rollback();
     console.error('Lỗi yêu cầu bổ sung:', error);
     res.status(500).json({ success: false, message: 'Đã có lỗi xảy ra.' });
-  }
-};
-//2. DUYỆT HỒ SƠ (CÓ CHUYỂN NHƯỢNG → BLOCKCHAIN)
-exports.approveHoSo = async (req, res) => {
-  let t;
-  const io = req.app.get('io');
-  try {
-    t = await sequelize.transaction();
-
-    const { hosoId } = req.params;
-    const { note } = req.body;
-    const actor_id = req.user.id;
-
-    // === BƯỚC 1: LẤY HỒ SƠ + KHÓA DÒNG (CHỈ KHÓA HoSo) ===
-    const hoso = await HoSo.findByPk(hosoId, {
-      transaction: t,
-      lock: t.LOCK.UPDATE // CHỈ KHÓA BẢNG CHÍNH
-    });
-
-    if (!hoso || !['Chờ xử lý', 'Đang xử lý'].includes(hoso.status)) {
-      await t.rollback();
-      return res.status(400).json({ success: false, message: 'Hồ sơ không hợp lệ hoặc không thể duyệt.' });
-    }
-
-    // === BƯỚC 2: LẤY DỮ LIỆU CHI TIẾT (KHÔNG DÙNG LOCK) ===
-    const fullHoso = await HoSo.findByPk(hosoId, {
-      include: [
-        { model: LandParcel, as: 'parcel', required: true },
-        { 
-          model: Account, 
-          as: 'account', 
-          required: true,
-          include: [{ model: UserProfile, as: 'UserProfile', required: true }] 
-        }
-      ],
-      transaction: t
-    });
-
-    if (!fullHoso.parcel || !fullHoso.account?.UserProfile) {
-      await t.rollback();
-      return res.status(400).json({ success: false, message: 'Thiếu thông tin thửa đất hoặc chủ sở hữu.' });
-    }
-
-    const oldStatus = hoso.status;
-    let newOwnerId = hoso.account_id;
-    let actionType = 'INITIAL_REGISTRATION';
-    let receiverName = fullHoso.account.UserProfile.full_name;
-    let certificateNumber = `GCN-${hosoId}-${Date.now().toString().slice(-6)}`;
-    let txHash = null;
-    let ipfsHash = `Qm${actionType}${hosoId}${Date.now()}`;
-
-    // === XỬ LÝ CHUYỂN NHƯỢNG ===
-    if (hoso.type === 'Chuyển nhượng' && hoso.receiver_info) {
-      const { full_name, id_number } = hoso.receiver_info;
-
-      let receiverAccount = await Account.findOne({ where: { username: id_number }, transaction: t });
-      if (!receiverAccount) {
-        receiverAccount = await Account.create({
-          username: id_number,
-          password: await bcrypt.hash(id_number, 10),
-          role: 'Người dân'
-        }, { transaction: t });
-        await UserProfile.create({
-          account_id: receiverAccount.account_id,
-          full_name,
-          cccd: id_number
-        }, { transaction: t });
-      }
-
-      newOwnerId = receiverAccount.account_id;
-      actionType = 'OWNERSHIP_TRANSFER';
-      receiverName = full_name;
-      ipfsHash = `QmTransfer${hosoId}${Date.now()}`;
-    }
-
-    // === CHUYỂN owner_id (số) → địa chỉ 0x... (40 ký tự hex) ===
-    let ownerAddress;
-    try {
-      ownerAddress = `0x${BigInt(newOwnerId).toString(16).padStart(40, '0')}`;
-      // Kiểm tra địa chỉ hợp lệ
-      // if (!ethers.isAddress(ownerAddress)) throw new Error('Invalid address');
-    } catch (error) {
-      await t.rollback();
-      return res.status(400).json({ success: false, message: 'Owner ID không hợp lệ.' });
-    }
-
-    // === GHI LÊN BLOCKCHAIN (CẢ 2 LOẠI) ===
-    try {
-      txHash = await transferOwnership(
-        fullHoso.parcel.parcel_code,
-        ownerAddress, 
-        ipfsHash
-      );
-      console.log('txHash từ blockchain:', txHash);
-    } catch (blockchainError) {
-      console.error('Lỗi ghi blockchain:', blockchainError);
-      await t.rollback();
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Ghi blockchain thất bại.', 
-        error: blockchainError.message 
-      });
-    }
-
-    // === GHI GIAO DỊCH BLOCKCHAIN VÀO DB ===
-    const bt = await BlockchainTransaction.create({
-      hoso_id: hoso.hoso_id,
-      action: actionType,
-      ipfs_hash: ipfsHash,
-      hash_value: txHash,
-      status: 'CONFIRMED'
-    }, { transaction: t });
-
-    // === CẬP NHẬT LỊCH SỬ SỞ HỮU (LandOwnership) ===
-    await LandOwnership.update(
-      { is_current: false, end_date: sequelize.literal('CURRENT_DATE') },
-      { where: { parcel_id: fullHoso.parcel_id, is_current: true }, 
-      transaction: t }
-    );
-
-    await LandOwnership.create({
-      parcel_id: fullHoso.parcel_id,
-      owner_id: newOwnerId,
-      start_date: sequelize.literal('CURRENT_DATE'),
-      is_current: true,
-      blockchain_tx_id: bt.transaction_id
-    }, { transaction: t });
-
-    // === CẬP NHẬT LandParcel ===
-    await LandParcel.update(
-      { owner_id: newOwnerId },
-      { where: { parcel_id: fullHoso.parcel_id }, transaction: t }
-    );
-
-    // === GHI LỊCH SỬ CHUYỂN NHƯỢNG (nếu có) ===
-    if (hoso.type === 'Chuyển nhượng') {
-      await LandTransferHistory.create({
-        parcel_id: fullHoso.parcel_id,
-        from_owner_id: hoso.account_id,
-        to_owner_id: newOwnerId,
-        hoso_id: hoso.hoso_id,
-        blockchain_tx_id: bt.transaction_id
-      }, { transaction: t });
-    }
-
-    // === GHI LỊCH SỬ HỒ SƠ ===
-    const actionText = hoso.type === 'Chuyển nhượng' ? 'Chuyển nhượng thành công' : 'Cấp GCN lần đầu';
-    await logHistory(
-      hosoId,
-      oldStatus,
-      'Đã duyệt',
-      actionText,
-      actor_id,
-      `${receiverName} | GCN: ${certificateNumber} | Tx: ${txHash}`,
-      t
-    );
-
-    // === CẬP NHẬT TRẠNG THÁI ===
-    await hoso.update({ status: 'Đã duyệt' }, { transaction: t });
-
-    await t.commit();
-
-    // === GỬI THÔNG BÁO ===
-    emit('hoso.approved', { io, accountId: hoso.account_id, hosoId: hoso.hoso_id });
-    if (hoso.type === 'Chuyển nhượng') {
-      const receiverAcc = await Account.findOne({ where: { username: hoso.receiver_info.id_number } });
-      if (receiverAcc) emit('hoso.approved', { io, accountId: receiverAcc.account_id, hosoId: hoso.hoso_id });
-    }
-
-    // === TRẢ KẾT QUẢ ===
-    res.status(200).json({
-      success: true,
-      message: 'Duyệt hồ sơ thành công.',
-      data: {
-        hoso_id: hoso.hoso_id,
-        certificate_number: certificateNumber,
-        blockchain_tx: txHash,
-        owner_id: newOwnerId,
-        owner_address: ownerAddress,
-        action: actionType
-      }
-    });
-
-  } catch (error) {
-    if (t) await t.rollback();
-    console.error('Lỗi duyệt hồ sơ:', error);
-    res.status(500).json({ success: false, message: 'Lỗi server.', error: error.message });
   }
 };
 
@@ -633,34 +452,27 @@ exports.getAllHoSo = async (req, res) => {
 // Lấy danh sách hồ sơ liên quan đến thửa đất
 exports.getByParcelCode = async (req, res) => {
   try {
-    
     const { parcel_id } = req.params;
     const { role, id: userId } = req.user;
-    // === KIỂM TRA ĐẦU VÀO ===
+
+    // Kiểm tra đầu vào
     if (!parcel_id || isNaN(parcel_id)) {
       return res.status(400).json({
         success: false,
         message: 'ID thửa đất không hợp lệ.',
       });
     }
-    // === TÌM HỒ SƠ ===
-    const whereClause = {
-      parcel_id: parcel_id,
-    };
-    // Người dân chỉ xem được hồ sơ của mình
+
+    // Điều kiện tìm kiếm
+    const whereClause = { parcel_id };
     if (role === 'Người dân') {
       whereClause.account_id = userId;
     }
 
+    // Lấy danh sách hồ sơ
     const dossiers = await HoSo.findAll({
       where: whereClause,
-      attributes: [
-        'hoso_id',
-        'type',
-        'status',
-        'created_at',
-        'receiver_info',
-      ],
+      attributes: ['hoso_id', 'type', 'status', 'created_at', 'receiver_info'],
       include: [
         {
           model: LandParcel,
@@ -671,23 +483,26 @@ exports.getByParcelCode = async (req, res) => {
         {
           model: HoSoDocument,
           as: 'HoSoDocuments',
-          attributes: ['ipfs_hash'],
-          separate: true,
+          attributes: ['doc_name', 'ipfs_hash', 'file_path'],
+          required: false, // Bỏ separate để lấy đúng tất cả file
         },
         {
           model: BlockchainTransaction,
           as: 'BlockchainTransactions',
-          attributes: ['hash_value', 'action'],
-          separate: true,
+          attributes: ['hash_value', 'action', 'ipfs_hash' ],
+          required: false,
         },
       ],
       order: [['created_at', 'DESC']],
     });
 
-    // === CHUẨN HÓA DỮ LIỆU TRẢ VỀ ===
+    // Chuẩn hóa dữ liệu trả về
     const result = dossiers.map(hoso => {
       const data = hoso.toJSON();
-      const latestDoc = data.HoSoDocuments?.[0];
+      // Ưu tiên lấy file GCN tổng hợp (chứa ipfs_hash)
+      const gcnDoc = data.HoSoDocuments?.find(doc =>
+        doc.doc_name?.includes('GCN_') && doc.doc_name?.includes('TongHop')
+      );
       const latestTx = data.BlockchainTransactions?.[0];
 
       return {
@@ -695,7 +510,8 @@ exports.getByParcelCode = async (req, res) => {
         type: data.type,
         status: data.status,
         createdAt: data.created_at,
-        ipfsHash: latestDoc?.ipfs_hash || null,
+        ipfsHash: gcnDoc?.ipfs_hash || latestTx?.ipfs_hash || null,
+        
         txHash: latestTx?.hash_value || null,
         receiver_info: data.receiver_info,
       };

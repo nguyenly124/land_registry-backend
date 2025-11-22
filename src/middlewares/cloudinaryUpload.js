@@ -44,10 +44,11 @@ const uploadDocument = multer({
   storage: storageDocument,
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = /jpeg|jpg|png|pdf|doc|docx/;
-    const isValid = allowed.test(file.mimetype);
+    const allowedExt = /\.(jpg|jpeg|png|pdf|doc|docx)$/i;
+    const isValid = allowedExt.test(file.originalname);
+
     cb(isValid ? null : new Error("Chỉ chấp nhận file ảnh/tài liệu!"), isValid);
-  },
+  }
 });
 
 module.exports = { uploadAvatar, uploadDocument };

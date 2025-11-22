@@ -4,6 +4,7 @@ const { validate } = require('../middlewares/validateMiddleware');
 const authMiddleware = require('../middlewares/authMiddleware');
 const dossierController = require('../controllers/dossierController');
 const hosoHistoryController=require('../controllers/dosserHistoryController');
+const blockchainController=require('../controllers/blockchainController');
 const {
   submitFileSchema,
   approveHoSoSchema,
@@ -46,7 +47,7 @@ router.patch('/:hosoId/confirm', authMiddleware,dossierController.confirmProcess
 
 router.patch('/:hosoId/supplement',authMiddleware, dossierController.requestSupplement);
 
-router.patch('/:hosoId/approve',authMiddleware, dossierController.approveHoSo);
+router.patch('/:hosoId/approve',authMiddleware, blockchainController.approveHoSo);
 
 router.patch('/:hosoId/reject', authMiddleware,dossierController.rejectHoSo);
 

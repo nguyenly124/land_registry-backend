@@ -62,6 +62,14 @@ module.exports = function(sequelize, DataTypes) {
         model: 'BlockchainTransaction',
         key: 'transaction_id'
       }
+    },
+    payment_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'Payment',
+        key: 'payment_id'
+      }
     }
   }, {
     sequelize,
