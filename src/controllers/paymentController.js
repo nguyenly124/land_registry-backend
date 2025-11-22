@@ -128,8 +128,8 @@ const createPayOSInternal = async (hoso_id, amount, transaction = null) => {
     orderCode,
     amount,
     description: `Lệ phí hồ sơ đất đai #${hoso_id}`,
-    returnUrl: `${process.env.FRONTEND_URL}/payment-return?hoso_id=${hoso_id}&status=success`,
-    cancelUrl: `${process.env.FRONTEND_URL}/payment-return?hoso_id=${hoso_id}&status=cancel`,
+    returnUrl: `${process.env.CLIENT_URL}/payment-return?hoso_id=${hoso_id}&status=success`,
+    cancelUrl: `${process.env.CLIENT_URL}/payment-return?hoso_id=${hoso_id}&status=cancel`,
     items: [{ name: "Lệ phí cấp GCN", quantity: 1, price: amount }],
   };
 
