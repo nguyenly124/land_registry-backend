@@ -133,8 +133,13 @@ const createPayOSInternal = async (hoso_id, amount, transaction = null) => {
     items: [{ name: "Lệ phí cấp GCN", quantity: 1, price: amount }],
   };
 
-  const dataToSign = `amount=${body.amount}&cancelUrl=${encodeURIComponent(body.cancelUrl)}&description=${encodeURIComponent(body.description)}&orderCode=${body.orderCode}&returnUrl=${encodeURIComponent(body.returnUrl)}`;
-  const signature = crypto.createHmac('sha256', process.env.PAYOS_CHECKSUM_KEY.trim()).update(dataToSign).digest('hex');
+  const rawData =
+    `${body.amount}${body.description}${body.orderCode}${body.returnUrl}${body.cancelUrl}`;
+
+  const signature = crypto
+    .createHmac("sha256", process.env.PAYOS_CHECKSUM_KEY.trim())
+    .update(rawData)
+    .digest("hex");
 
   try {
     const response = await axios.post(PAYOS_API_URL, {
