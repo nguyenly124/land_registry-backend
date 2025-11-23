@@ -61,15 +61,7 @@ exports.submitHoSo = async (req, res) => {
       status: 'Chờ xử lý',
       receiver_info: type === 'Chuyển nhượng' ? receiver_info : null
     }, { transaction: t });
-    // === XỬ LÝ TÀI LIỆU (Cloudinary → IPFS → Blockchain) ===
-    // if (files && files.length > 0) {
-    //   for (const file of files) {
-    //     const result = await processDocument(file, newHoSo.hoso_id);
-    //     await logBlockchainTx(newHoSo.hoso_id, 'DOCUMENT_SUBMITTED', result.ipfsHash, result.txHash, t);
-    //   }
-    // }
-    const amount = type === 'Đăng ký sử dụng' ? 7000 : 100000;
-    const payosData = await createPayOSInternal(newHoSo.hoso_id, amount, t);
+  
     // === GHI LỊCH SỬ ===
     await logHistory(
       newHoSo.hoso_id,
@@ -93,11 +85,8 @@ exports.submitHoSo = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Nộp hồ sơ thành công! Đang chuyển sang thanh toán...',
-      data: {
-        hoso: { ...newHoSo.toJSON() },
-        paymentUrl: payosData.checkoutUrl
-      }
+      message: 'Nộp hồ sơ thành công.',
+      data: { ...newHoSo.toJSON(), documents_uploaded: files?.length || 0 }
     });
   } catch (error) {
     if (t) await t.rollback();
@@ -464,7 +453,7 @@ exports.getByParcelCode = async (req, res) => {
     }
 
     // Điều kiện tìm kiếm
-    const whereClause = { parcel_id };
+    const whereClause = { parcel_id, status: "Đã duyệt", };
     if (role === 'Người dân') {
       whereClause.account_id = userId;
     }
@@ -472,6 +461,7 @@ exports.getByParcelCode = async (req, res) => {
     // Lấy danh sách hồ sơ
     const dossiers = await HoSo.findAll({
       where: whereClause,
+      
       attributes: ['hoso_id', 'type', 'status', 'created_at', 'receiver_info'],
       include: [
         {
