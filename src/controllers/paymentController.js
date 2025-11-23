@@ -7,9 +7,6 @@ const { generateSignature } = require("../utils/payos");
 
 const PAYOS_API_URL = "https://api-merchant.payos.vn/v2/payment-requests";
 
-/* ---------------------------------------------------
-  Tạo thanh toán PayOS nội bộ
---------------------------------------------------- */
 const createPayOSInternal = async (hoso_id, amount, transaction = null) => {
   const hoso = await HoSo.findByPk(hoso_id, { transaction });
   if (!hoso) throw new Error("Hồ sơ không tồn tại");
@@ -19,6 +16,7 @@ const createPayOSInternal = async (hoso_id, amount, transaction = null) => {
 
   const bodyForSignature = {
     orderCode,
+
     amount: Number(amount),
     description: `Lệ phí hồ sơ #${hoso_id}`.slice(0, 25),
     cancelUrl: `${process.env.CLIENT_URL}/payment-return?hoso_id=${hoso_id}&status=cancel`,
@@ -28,6 +26,7 @@ const createPayOSInternal = async (hoso_id, amount, transaction = null) => {
   const signature = generateSignature(bodyForSignature, process.env.PAYOS_CHECKSUM_KEY);
 
   const payload = { ...bodyForSignature, signature };
+
 
   try {
     const response = await axios.post(PAYOS_API_URL, payload, {
@@ -70,9 +69,7 @@ const createPayOSInternal = async (hoso_id, amount, transaction = null) => {
   }
 };
 
-/* ---------------------------------------------------
-  API tạo thanh toán PayOS
---------------------------------------------------- */
+
 const createPayOS = async (req, res) => {
   try {
     const { hoso_id, amount } = req.body;
@@ -91,9 +88,7 @@ const createPayOS = async (req, res) => {
 }
 };
 
-/* ---------------------------------------------------
-  Webhook PayOS
---------------------------------------------------- */
+
 const payOSWebhook = async (req, res) => {
   try {
     console.log("\n=== PAYOS WEBHOOK DATA ===");
