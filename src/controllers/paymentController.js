@@ -91,41 +91,69 @@ const createPayOS = async (req, res) => {
 
 const payOSWebhook = async (req, res) => {
   try {
-    console.log("\n=== PAYOS WEBHOOK DATA ===");
-    console.log(JSON.stringify(req.body, null, 2));
-    console.log("===========================\n");
+    console.log("=== PAYOS WEBHOOK ===");
+    console.log("Headers:", req.headers);
+    console.log("Raw body:", req.rawBody);
+    console.log("Body:", req.body);
 
-    const { data, signature: receivedSignature } = req.body;
-    if (!data) return res.status(400).json({ message: "Missing data" });
+    // 1. Lấy signature từ HEADER (KHÔNG lấy từ body)
+    const receivedSignature = req.headers["x-payos-signature"];
+    if (!receivedSignature) {
+      console.log("❌ Không có x-payos-signature");
+      return res.status(400).send("Missing signature");
+    }
 
-    const computedSignature = generateSignature(data, process.env.PAYOS_CHECKSUM_KEY);
+    // 2. Verify bằng RAW BODY
+    const computedSignature = generateSignature(
+      req.rawBody,
+      process.env.PAYOS_CHECKSUM_KEY
+    );
+
     if (computedSignature !== receivedSignature) {
-      console.log("❌ Sai chữ ký webhook");
+      console.log("❌ Sai chữ ký");
       return res.status(400).send("Invalid signature");
     }
 
-    const orderCode = data.orderCode?.toString();
+    // 3. Payload
+    const data = req.body.data;
+    const orderCode = String(data.orderCode); // ép về string
+    const code = data.code; // "00" = success
 
-    if (["PAID", "SUCCESS", "00"].includes((data.status || "").toUpperCase())) {
-      await Payment.update(
+    // 4. Chỉ update khi code === "00"
+    if (code === "00") {
+      const [updateCount] = await Payment.update(
         {
           payment_status: "Thành công",
-          vnp_transaction_no: data?.transactionId || data?.id,
+          vnp_transaction_no: data.reference,
           vnp_pay_date: new Date(),
         },
         { where: { vnp_txn_ref: orderCode } }
       );
 
+      console.log("Update count:", updateCount);
+
+      if (updateCount === 0) {
+        console.log("❌ Không tìm thấy payment để update");
+      } else {
+        console.log("✔ Payment updated", orderCode);
+      }
+
       const payment = await Payment.findOne({ where: { vnp_txn_ref: orderCode } });
+
       if (payment) {
-        await HoSo.update({ status: "Chờ xử lý", payment_id: payment.payment_id }, { where: { hoso_id: payment.hoso_id } });
+        await HoSo.update(
+          { status: "Đang xử lý", payment_id: payment.payment_id },
+          { where: { hoso_id: payment.hoso_id } }
+        );
+
+        console.log("✔ Hồ sơ cập nhật:", payment.hoso_id);
       }
     }
 
-    res.json({ success: true });
+    return res.json({ success: true });
   } catch (err) {
-    console.error("payOSWebhook error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("Webhook error:", err);
+    return res.status(500).json({ message: err.message });
   }
 };
 

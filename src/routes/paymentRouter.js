@@ -6,5 +6,5 @@ const paymentController = require("../controllers/paymentController");
 
 
 router.post("/payos", paymentController.createPayOS);
-router.post("/payos/webhook",express.raw({ type: "application/json" }), paymentController.payOSWebhook);
+router.post("/",express.raw({ type: "application/json" }), paymentController.payOSWebhook);
 module.exports = router;
