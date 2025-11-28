@@ -19,8 +19,8 @@ const createPayOSInternal = async (hoso_id, amount, transaction = null) => {
 
     amount: Number(amount),
     description: `Lệ phí hồ sơ #${hoso_id}`.slice(0, 25),
-    cancelUrl: `${process.env.CLIENT_URL}/payment-return?hoso_id=${hoso_id}&status=cancel`,
-    returnUrl: `${process.env.CLIENT_URL}/dossier/${hoso_id}`,
+    cancelUrl: `${process.env.CLIENT_URL}/dossier/${hoso_id}#payment-cancel`,
+    returnUrl: `${process.env.CLIENT_URL}/dossier/${hoso_id}#payment-success`,
   };
 
   const signature = generateSignature(bodyForSignature, process.env.PAYOS_CHECKSUM_KEY);
