@@ -184,8 +184,8 @@ exports.approveHoSo = async (req, res) => {
       action: actionType,
       ipfs_hash: gcnIpfsHash,
       ipfs_url: gcnIpfsUrl,
-      hash_value: null,
-      status: 'CONFIRMED'
+      hash_value: "LOCAL_ONLY",
+      status: ' "LOCAL_ONLY"'
     }, { transaction: t });
 
     // Cập nhật sở hữu + parcel
