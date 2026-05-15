@@ -1,4 +1,3 @@
-const axios = require('axios');
 const { initModels } = require('../models/init-models');
 const { sequelize } = require('../config/db');
 const { emit } = require('../utils/NotificationEvent');
@@ -169,25 +168,25 @@ exports.approveHoSo = async (req, res) => {
       issue_date: new Date().toISOString().split('T')[0],
       type: actionType === 'OWNERSHIP_TRANSFER' ? 'Chuyển nhượng quyền sử dụng đất' : 'Cấp giấy chứng nhận lần đầu',
       hoso_id: fullHoso.hoso_id,
-      issued_by: 'Hệ thống Quản lý Đất đai Blockchain'
+      issued_by: 'Hệ thống Quản lý Đất đai Blockchain - Đồ án Đại học'
     };
 
     const { gcnIpfsHash, gcnIpfsUrl, documentLinks } =
     await exports.uploadHosoToIPFS(fullHoso, certificateNumber, gcnData, t);
 
     // Ghi blockchain
-    // const ownerAddress = `0x${BigInt(newOwnerId).toString(16).padStart(40, '0')}`;
-    // const txHash = await transferOwnership(fullHoso.parcel.parcel_code, ownerAddress, gcnIpfsHash);
+    const ownerAddress = `0x${BigInt(newOwnerId).toString(16).padStart(40, '0')}`;
+    const txHash = await transferOwnership(fullHoso.parcel.parcel_code, ownerAddress, gcnIpfsHash);
 
     // Lưu giao dịch
-  //   const bt = await BlockchainTransaction.create({
-  //   hoso_id: hoso.hoso_id,
-  //   action: actionType,
-  //   ipfs_hash: gcnIpfsHash,
-  //   ipfs_url: gcnIpfsUrl,
-  //   hash_value: "LOCAL_ONLY",
-  //   status: "LOCAL_ONLY"
-  // }, { transaction: t });
+    const bt = await BlockchainTransaction.create({
+      hoso_id: hoso.hoso_id,
+      action: actionType,
+      ipfs_hash: gcnIpfsHash,
+      ipfs_url: gcnIpfsUrl,
+      hash_value: txHash,
+      status: 'CONFIRMED'
+    }, { transaction: t });
 
     // Cập nhật sở hữu + parcel
     await LandOwnership.update(
@@ -199,7 +198,7 @@ exports.approveHoSo = async (req, res) => {
       owner_id: newOwnerId,
       start_date: new Date(),
       is_current: true,
-      blockchain_tx_id: null
+      blockchain_tx_id: bt.transaction_id
     }, { transaction: t });
 
     await LandParcel.update({
@@ -208,7 +207,7 @@ exports.approveHoSo = async (req, res) => {
       certificate_issue_date: new Date(),
       registration_status: 'Đã cấp GCN',
       current_owner_blockchain: true,
-      ownership_blockchain_tx_id: null
+      ownership_blockchain_tx_id: bt.transaction_id
     }, { where: { parcel_id: fullHoso.parcel.parcel_id }, transaction: t });
 
     if (hoso.type === 'Chuyển nhượng') {
@@ -217,7 +216,7 @@ exports.approveHoSo = async (req, res) => {
         from_owner_id: hoso.account_id,
         to_owner_id: newOwnerId,
         hoso_id: hoso.hoso_id,
-        blockchain_tx_id: null
+        blockchain_tx_id: bt.transaction_id
       }, { transaction: t });
     }
 
@@ -228,8 +227,8 @@ exports.approveHoSo = async (req, res) => {
     await hoso.update({
       status: 'Đã duyệt',
       blockchain_synced: true,
-      blockchain_tx_id: null,
-      last_blockchain_action: null
+      blockchain_tx_id: bt.transaction_id,
+      last_blockchain_action: actionType
     }, { transaction: t });
 
     await t.commit();
@@ -241,26 +240,14 @@ exports.approveHoSo = async (req, res) => {
     }
 
     return res.json({
-    success: true,
-    message: 'Duyệt hồ sơ thành công! Toàn bộ tài liệu đã lưu trên IPFS.',
-    data: {
-      certificate_number: certificateNumber,
-      ipfs_url: gcnIpfsUrl,
-      
-    }
-  });
+      success: true,
+      message: 'Duyệt hồ sơ thành công! Toàn bộ tài liệu đã lưu bất biến trên IPFS.',
+      data: { certificate_number: certificateNumber, ipfs_url: gcnIpfsUrl, blockchain_tx: txHash }
+    });
 
   } catch (error) {
-  if (t && !t.finished) {
-    await t.rollback();
+    if (t) await t.rollback();
+    console.error('Lỗi duyệt hồ sơ:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
   }
-
-  console.error('Lỗi duyệt hồ sơ:', error);
-
-  return res.status(500).json({
-    success: false,
-    message: 'Lỗi server',
-    error: error.message
-  });
-}
 };
