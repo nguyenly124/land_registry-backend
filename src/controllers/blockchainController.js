@@ -169,7 +169,7 @@ exports.approveHoSo = async (req, res) => {
       issue_date: new Date().toISOString().split('T')[0],
       type: actionType === 'OWNERSHIP_TRANSFER' ? 'Chuyển nhượng quyền sử dụng đất' : 'Cấp giấy chứng nhận lần đầu',
       hoso_id: fullHoso.hoso_id,
-      issued_by: 'Hệ thống Quản lý Đất đai Blockchain - Đồ án Đại học'
+      issued_by: 'Hệ thống Quản lý Đất đai Blockchain'
     };
 
     const { gcnIpfsHash, gcnIpfsUrl, documentLinks } =
@@ -180,14 +180,14 @@ exports.approveHoSo = async (req, res) => {
     // const txHash = await transferOwnership(fullHoso.parcel.parcel_code, ownerAddress, gcnIpfsHash);
 
     // Lưu giao dịch
-    const bt = await BlockchainTransaction.create({
-    hoso_id: hoso.hoso_id,
-    action: actionType,
-    ipfs_hash: gcnIpfsHash,
-    ipfs_url: gcnIpfsUrl,
-    hash_value: "LOCAL_ONLY",
-    status: "LOCAL_ONLY"
-  }, { transaction: t });
+  //   const bt = await BlockchainTransaction.create({
+  //   hoso_id: hoso.hoso_id,
+  //   action: actionType,
+  //   ipfs_hash: gcnIpfsHash,
+  //   ipfs_url: gcnIpfsUrl,
+  //   hash_value: "LOCAL_ONLY",
+  //   status: "LOCAL_ONLY"
+  // }, { transaction: t });
 
     // Cập nhật sở hữu + parcel
     await LandOwnership.update(
@@ -229,7 +229,7 @@ exports.approveHoSo = async (req, res) => {
       status: 'Đã duyệt',
       blockchain_synced: true,
       blockchain_tx_id: null,
-      last_blockchain_action: actionType
+      last_blockchain_action: null
     }, { transaction: t });
 
     await t.commit();
@@ -246,7 +246,7 @@ exports.approveHoSo = async (req, res) => {
     data: {
       certificate_number: certificateNumber,
       ipfs_url: gcnIpfsUrl,
-      blockchain_tx: null
+      
     }
   });
 
