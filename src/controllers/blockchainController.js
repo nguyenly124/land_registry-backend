@@ -157,7 +157,7 @@ exports.approveHoSo = async (req, res) => {
       receiverName = full_name;
     }
 
-    // GỌI SERVICE ĐẨY TOÀN BỘ LÊN IPFS (chỉ 1 dòng!)
+    // GỌI SERVICE ĐẨY TOÀN BỘ LÊN IPFS 
     const gcnData = {
       certificate_number: certificateNumber,
       parcel_code: fullHoso.parcel.parcel_code,
@@ -175,8 +175,8 @@ exports.approveHoSo = async (req, res) => {
     await exports.uploadHosoToIPFS(fullHoso, certificateNumber, gcnData, t);
 
     // Ghi blockchain
-    const ownerAddress = `0x${BigInt(newOwnerId).toString(16).padStart(40, '0')}`;
-    const txHash = await transferOwnership(fullHoso.parcel.parcel_code, ownerAddress, gcnIpfsHash);
+    // const ownerAddress = `0x${BigInt(newOwnerId).toString(16).padStart(40, '0')}`;
+    // const txHash = await transferOwnership(fullHoso.parcel.parcel_code, ownerAddress, gcnIpfsHash);
 
     // Lưu giao dịch
     const bt = await BlockchainTransaction.create({
@@ -184,7 +184,7 @@ exports.approveHoSo = async (req, res) => {
       action: actionType,
       ipfs_hash: gcnIpfsHash,
       ipfs_url: gcnIpfsUrl,
-      hash_value: txHash,
+      hash_value: null,
       status: 'CONFIRMED'
     }, { transaction: t });
 
@@ -198,7 +198,7 @@ exports.approveHoSo = async (req, res) => {
       owner_id: newOwnerId,
       start_date: new Date(),
       is_current: true,
-      blockchain_tx_id: bt.transaction_id
+      blockchain_tx_id: null
     }, { transaction: t });
 
     await LandParcel.update({
@@ -207,7 +207,7 @@ exports.approveHoSo = async (req, res) => {
       certificate_issue_date: new Date(),
       registration_status: 'Đã cấp GCN',
       current_owner_blockchain: true,
-      ownership_blockchain_tx_id: bt.transaction_id
+      ownership_blockchain_tx_id: null
     }, { where: { parcel_id: fullHoso.parcel.parcel_id }, transaction: t });
 
     if (hoso.type === 'Chuyển nhượng') {
@@ -216,7 +216,7 @@ exports.approveHoSo = async (req, res) => {
         from_owner_id: hoso.account_id,
         to_owner_id: newOwnerId,
         hoso_id: hoso.hoso_id,
-        blockchain_tx_id: bt.transaction_id
+        blockchain_tx_id: null
       }, { transaction: t });
     }
 
@@ -227,7 +227,7 @@ exports.approveHoSo = async (req, res) => {
     await hoso.update({
       status: 'Đã duyệt',
       blockchain_synced: true,
-      blockchain_tx_id: bt.transaction_id,
+      blockchain_tx_id: null,
       last_blockchain_action: actionType
     }, { transaction: t });
 
