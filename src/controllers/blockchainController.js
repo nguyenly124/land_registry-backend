@@ -1,3 +1,4 @@
+const axios = require('axios');
 const { initModels } = require('../models/init-models');
 const { sequelize } = require('../config/db');
 const { emit } = require('../utils/NotificationEvent');
@@ -180,13 +181,13 @@ exports.approveHoSo = async (req, res) => {
 
     // Lưu giao dịch
     const bt = await BlockchainTransaction.create({
-      hoso_id: hoso.hoso_id,
-      action: actionType,
-      ipfs_hash: gcnIpfsHash,
-      ipfs_url: gcnIpfsUrl,
-      hash_value: "LOCAL_ONLY",
-      status: ' "LOCAL_ONLY"'
-    }, { transaction: t });
+    hoso_id: hoso.hoso_id,
+    action: actionType,
+    ipfs_hash: gcnIpfsHash,
+    ipfs_url: gcnIpfsUrl,
+    hash_value: "LOCAL_ONLY",
+    status: "LOCAL_ONLY"
+  }, { transaction: t });
 
     // Cập nhật sở hữu + parcel
     await LandOwnership.update(
@@ -240,14 +241,26 @@ exports.approveHoSo = async (req, res) => {
     }
 
     return res.json({
-      success: true,
-      message: 'Duyệt hồ sơ thành công! Toàn bộ tài liệu đã lưu bất biến trên IPFS.',
-      data: { certificate_number: certificateNumber, ipfs_url: gcnIpfsUrl, blockchain_tx: txHash }
-    });
+    success: true,
+    message: 'Duyệt hồ sơ thành công! Toàn bộ tài liệu đã lưu trên IPFS.',
+    data: {
+      certificate_number: certificateNumber,
+      ipfs_url: gcnIpfsUrl,
+      blockchain_tx: null
+    }
+  });
 
   } catch (error) {
-    if (t) await t.rollback();
-    console.error('Lỗi duyệt hồ sơ:', error);
-    return res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+  if (t && !t.finished) {
+    await t.rollback();
   }
+
+  console.error('Lỗi duyệt hồ sơ:', error);
+
+  return res.status(500).json({
+    success: false,
+    message: 'Lỗi server',
+    error: error.message
+  });
+}
 };
