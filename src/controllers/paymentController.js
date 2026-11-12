@@ -1,4 +1,5 @@
 require("dotenv").config();
+const crypto = require("crypto");
 const axios = require("axios");
 const { initModels } = require("../models/init-models");
 const { sequelize } = require("../config/db");
@@ -87,46 +88,59 @@ const createPayOS = async (req, res) => {
 // 3. API WEBHOOK NHẬN CALLBACK TỪ PAYOS
 const payOSWebhook = async (req, res) => {
   try {
-    const receivedSignature = req.headers["x-payos-signature"];
-    // Nếu không có signature, vẫn tiếp tục update DB
-    if (!receivedSignature) {
-      console.warn("⚠ Không có x-payos-signature, bỏ qua verify tạm thời");
-    } else {
-      // Nếu có signature → verify như bình thường
-      const computedSignature = generateSignature(req.rawBody, process.env.PAYOS_CHECKSUM_KEY);
-      if (computedSignature !== receivedSignature) {
-        console.log(" Sai chữ ký");
-        return res.status(400).send("Invalid signature");
-      }
+    // PayOS gửi webhook dạng { code, desc, success, data, signature }.
+    // Chữ ký nằm trong body (trường "signature") và được ký trên object "data"
+    // (sắp xếp key theo alphabet → chuỗi key=value&... → HMAC-SHA256 với checksum key).
+    // BẮT BUỘC xác thực: không có chữ ký hợp lệ thì không cập nhật gì.
+    const { data, signature: receivedSignature } = req.body || {};
+    if (!data || !receivedSignature) {
+      console.warn("Webhook PayOS thiếu data hoặc signature → từ chối");
+      return res.status(400).json({ success: false, message: "Missing data or signature" });
     }
-    const data = req.body.data;
-    if (!data) return res.status(400).send("Missing data");
+
+    const computedSignature = generateSignature(data, process.env.PAYOS_CHECKSUM_KEY);
+    const expected = Buffer.from(computedSignature, "hex");
+    const received = Buffer.from(String(receivedSignature), "hex");
+    if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) {
+      console.warn(" Sai chữ ký webhook PayOS");
+      return res.status(400).json({ success: false, message: "Invalid signature" });
+    }
+
     const orderCode = String(data.orderCode);
-    const code = data.code;
     // Update DB khi giao dịch thành công
-    if (code === "00") {
-      const [updateCount] = await Payment.update(
-        {
+    if (data.code === "00") {
+      const payment = await Payment.findOne({ where: { vnp_txn_ref: orderCode } });
+      // Không có đơn tương ứng (vd: webhook kiểm tra khi đăng ký URL trên PayOS) → chỉ xác nhận đã nhận
+      if (!payment) return res.json({ success: true });
+
+      // Số tiền phải khớp với đơn đã tạo
+      if (Number(payment.amount) !== Number(data.amount)) {
+        console.warn(`Webhook PayOS: số tiền không khớp cho orderCode ${orderCode}`);
+        return res.json({ success: true });
+      }
+
+      // Webhook có thể được gửi lại nhiều lần → chỉ xử lý một lần
+      if (payment.payment_status !== "Thành công") {
+        await payment.update({
           payment_status: "Thành công",
           vnp_transaction_no: data.reference,
           vnp_pay_date: new Date(),
-        },
-        { where: { vnp_txn_ref: orderCode } }
-      );
-      // console.log("Update count:", updateCount);
-      const payment = await Payment.findOne({ where: { vnp_txn_ref: orderCode } });
-      if (payment) {
-        await HoSo.update(
-          { status: "Đang xử lý", payment_id: payment.payment_id },
-          { where: { hoso_id: payment.hoso_id } }
-        );
-        // console.log("✔ Hồ sơ cập nhật:", payment.hoso_id);
+        });
+
+        const hoso = await HoSo.findByPk(payment.hoso_id);
+        if (hoso) {
+          const updates = { payment_id: payment.payment_id };
+          // Chỉ chuyển sang "Đang xử lý" khi hồ sơ còn chờ, tránh webhook đến muộn
+          // ghi đè hồ sơ đã được duyệt / từ chối
+          if (hoso.status === "Chờ xử lý") updates.status = "Đang xử lý";
+          await hoso.update(updates);
+        }
       }
     }
     return res.json({ success: true });
   } catch (err) {
     console.error("Webhook error:", err);
-    return res.status(500).json({ message: err.message });
+    return res.status(500).json({ success: false, message: "Lỗi server" });
   }
 };
 

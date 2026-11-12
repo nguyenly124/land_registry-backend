@@ -10,6 +10,9 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+// Lỗi do người dùng chọn sai loại file → mã 400 để errorHandler trả message cho client
+const badFileError = (message) => Object.assign(new Error(message), { status: 400 });
+
 // Upload avatar
 const storageAvatar = new CloudinaryStorage({
   cloudinary,
@@ -26,7 +29,7 @@ const uploadAvatar = multer({
   fileFilter: (req, file, cb) => {
     const allowed = /jpeg|jpg|png|gif|webp/;
     const isValid = allowed.test(file.mimetype);
-    cb(isValid ? null : new Error("Chỉ chấp nhận file ảnh!"), isValid);
+    cb(isValid ? null : badFileError("Chỉ chấp nhận file ảnh!"), isValid);
   },
 });
 
@@ -47,7 +50,7 @@ const uploadDocument = multer({
     const allowedExt = /\.(jpg|jpeg|png|pdf|doc|docx)$/i;
     const isValid = allowedExt.test(file.originalname);
 
-    cb(isValid ? null : new Error("Chỉ chấp nhận file ảnh/tài liệu!"), isValid);
+    cb(isValid ? null : badFileError("Chỉ chấp nhận file ảnh/tài liệu!"), isValid);
   }
 });
 

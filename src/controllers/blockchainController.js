@@ -137,12 +137,24 @@ exports.approveHoSo = async (req, res) => {
     let actionType = 'INITIAL_REGISTRATION';
     let receiverName = fullHoso.account.UserProfile.full_name;
 
-    // Tạo số GCN
+    // Tạo số GCN (chỉ khi thửa đất chưa có — chuyển nhượng giữ nguyên số cũ)
     let certificateNumber = fullHoso.parcel.certificate_number;
     if (!certificateNumber) {
-      const year = new Date().getFullYear();
-      const count = await HoSo.count({ where: { created_at: { [Op.gte]: `${year}-01-01` } }, transaction: t });
-      certificateNumber = `GCN-${year}-${String(count + 1).padStart(6, '0')}`;
+      // Khóa theo transaction (PostgreSQL): các lần duyệt cần cấp số mới chạy lần lượt,
+      // khóa tự nhả khi commit/rollback → hai cán bộ duyệt cùng lúc không lấy trùng số.
+      await sequelize.query("SELECT pg_advisory_xact_lock(hashtext('gcn_certificate_number'))", { transaction: t });
+
+      // Số tiếp theo = số GCN lớn nhất đã cấp trong năm + 1
+      // (trước đây đếm số HỒ SƠ tạo trong năm → có thể trùng / không liên quan số đã cấp)
+      const prefix = `GCN-${new Date().getFullYear()}-`;
+      const lastIssued = await LandParcel.findOne({
+        where: { certificate_number: { [Op.like]: `${prefix}%` } },
+        order: [['certificate_number', 'DESC']],
+        attributes: ['certificate_number'],
+        transaction: t
+      });
+      const lastSeq = lastIssued ? parseInt(lastIssued.certificate_number.slice(prefix.length), 10) || 0 : 0;
+      certificateNumber = `${prefix}${String(lastSeq + 1).padStart(6, '0')}`;
     }
 
     // Xử lý chuyển nhượng
