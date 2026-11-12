@@ -98,8 +98,14 @@ exports.submitHoSo = async (req, res) => {
 exports.confirmProcessing = async (req, res) => {
   const t = await sequelize.transaction();
   try {
-    const { hoso_id } = req.params;
+    const { hosoId: hoso_id } = req.params;
     const actor_id = req.user.id;
+    const { role } = req.user;
+
+    if (role !== 'Cán bộ') {
+      await t.rollback();
+      return res.status(403).json({ message: 'Chỉ cán bộ mới được xác nhận xử lý hồ sơ.' });
+    }
 
     const hoso = await HoSo.findByPk(hoso_id, { transaction: t });
     if (!hoso) {
@@ -198,6 +204,12 @@ exports.rejectHoSo = async (req, res) => {
     const { hosoId } = req.params;
     const { reason  } = req.body;
     const actor_id = req.user.id;
+    const { role } = req.user;
+
+    if (role !== 'Cán bộ') {
+      await t.rollback();
+      return res.status(403).json({ message: 'Chỉ cán bộ mới được từ chối hồ sơ.' });
+    }
 
     if (!reason ?.trim()) {
       return res.status(400).json({ message: 'Vui lòng cung cấp lý do từ chối.' });
@@ -246,6 +258,9 @@ exports.editHoSo = async (req, res) => {
 
         if (!hoso) {
             return res.status(404).json({ message: 'Không tìm thấy hồ sơ.' });
+        }
+        if (hoso.account_id !== req.user.id) {
+            return res.status(403).json({ message: 'Bạn không có quyền chỉnh sửa hồ sơ này.' });
         }
         if (hoso.status !== 'Chờ xử lý' && hoso.status !== 'Đang xử lý') {
             return res.status(403).json({ message: 'Không thể chỉnh sửa hồ sơ ở trạng thái này.' });

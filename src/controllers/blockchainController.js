@@ -107,6 +107,11 @@ exports.approveHoSo = async (req, res) => {
   const io = req.app.get('io');
 
   try {
+    const { role } = req.user;
+    if (role !== 'Cán bộ') {
+      return res.status(403).json({ success: false, message: 'Chỉ cán bộ mới được duyệt hồ sơ.' });
+    }
+
     t = await sequelize.transaction();
     const { hosoId } = req.params;
     const actor_id = req.user.id;
@@ -168,7 +173,7 @@ exports.approveHoSo = async (req, res) => {
       issue_date: new Date().toISOString().split('T')[0],
       type: actionType === 'OWNERSHIP_TRANSFER' ? 'Chuyển nhượng quyền sử dụng đất' : 'Cấp giấy chứng nhận lần đầu',
       hoso_id: fullHoso.hoso_id,
-      issued_by: 'Hệ thống Quản lý Đất đai Blockchain - Đồ án Đại học'
+      issued_by: 'Hệ thống Quản lý Đất đai Blockchain'
     };
 
     const { gcnIpfsHash, gcnIpfsUrl, documentLinks } =
