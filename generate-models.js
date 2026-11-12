@@ -46,7 +46,6 @@ const auto = new SequelizeAuto(DB_NAME, DB_USER, DB_PASS, {
 auto.run()
   .then(data => {
     console.log(' Models generated successfully!');
-    console.log(' Tables:', Object.keys(data.tables));
   })
   .catch(err => {
     console.error(' Error generating models:', err);

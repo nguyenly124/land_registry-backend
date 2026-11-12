@@ -17,7 +17,7 @@ exports.createNotification = async (accountId, message) => {
             is_read: false
         });
 
-        console.log(`[Notification] Tạo thành công cho account_id: ${accountId}`);
+        // console.log(`[Notification] Tạo thành công cho account_id: ${accountId}`);
     } catch (error) {
         console.error('[Notification] Lỗi khi tạo:', error);
     }

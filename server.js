@@ -46,14 +46,14 @@ const startServer = async () => {
 
 // === XỬ LÝ DỮ LIỆU SOCKET.IO ===
 io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.id}`);
+  // console.log(`User connected: ${socket.id}`);
 
   // Người dùng tham gia room theo account_id
   socket.on('join', (accountId) => {
     if (accountId) {
       socket.join(`user_${accountId}`);
       app.get('onlineUsers').set(socket.id, accountId);
-      console.log(`User ${accountId} joined room: user_${accountId}`);
+      // console.log(`User ${accountId} joined room: user_${accountId}`);
     }
   });
 
@@ -61,7 +61,7 @@ io.on('connection', (socket) => {
     const accountId = app.get('onlineUsers').get(socket.id);
     app.get('onlineUsers').delete(socket.id);
     if (accountId) {
-      console.log(`User ${accountId} disconnected`);
+      // console.log(`User ${accountId} disconnected`);
     }
   });
 });

@@ -31,7 +31,7 @@ const sendEmail = async (to, subject, html, text = '') => {
   }
 };
 
-// Gửi OTP đăng nhập
+// Gửi OTP 
 const sendOTP = async (email, otp) => {
   const subject = 'Mã OTP Xác thực Tài khoản';
   const html = `
