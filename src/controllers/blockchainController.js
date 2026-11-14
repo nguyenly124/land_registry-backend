@@ -250,11 +250,9 @@ exports.approveHoSo = async (req, res) => {
 
     await t.commit();
 
-    emit('hoso.approved', { io, accountId: hoso.account_id, hosoId });
-    if (hoso.type === 'Chuyển nhượng') {
-      const receiverAcc = await Account.findOne({ where: { username: hoso.receiver_info.id_number } });
-      if (receiverAcc) emit('hoso.approved', { io, accountId: receiverAcc.account_id, hosoId });
-    }
+    // Emit một lần: handler tự báo người nộp và (nếu chuyển nhượng) người nhận.
+    // Trước đây emit 2 lần → người nhận chuyển nhượng nhận 3 thông báo trùng.
+    emit('hoso.approved', { io, hosoId: hoso.hoso_id });
 
     return res.json({
       success: true,

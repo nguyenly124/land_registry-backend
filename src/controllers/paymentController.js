@@ -5,6 +5,7 @@ const { initModels } = require("../models/init-models");
 const { sequelize } = require("../config/db");
 const { HoSo, Payment } = initModels(sequelize);
 const { generateSignature } = require("../utils/payos");
+const { emit } = require("../utils/NotificationEvent");
 
 const PAYOS_API_URL = "https://api-merchant.payos.vn/v2/payment-requests";
 
@@ -132,8 +133,14 @@ const payOSWebhook = async (req, res) => {
           const updates = { payment_id: payment.payment_id };
           // Chỉ chuyển sang "Đang xử lý" khi hồ sơ còn chờ, tránh webhook đến muộn
           // ghi đè hồ sơ đã được duyệt / từ chối
-          if (hoso.status === "Chờ xử lý") updates.status = "Đang xử lý";
+          const movedToProcessing = hoso.status === "Chờ xử lý";
+          if (movedToProcessing) updates.status = "Đang xử lý";
           await hoso.update(updates);
+
+          // Báo người nộp (đã nhận lệ phí) + cán bộ (có hồ sơ mới cần xử lý)
+          if (movedToProcessing) {
+            emit("hoso.paid", { io: req.app.get("io"), hosoId: hoso.hoso_id });
+          }
         }
       }
     }

@@ -204,6 +204,7 @@ exports.rejectHoSo = async (req, res) => {
     const { hosoId } = req.params;
     const { reason  } = req.body;
     const actor_id = req.user.id;
+    const io = req.app.get('io');
     const { role } = req.user;
 
     if (role !== 'Cán bộ') {
@@ -241,6 +242,15 @@ exports.rejectHoSo = async (req, res) => {
     );
 
     await t.commit();
+
+    // Báo người nộp kèm lý do (trước đây có handler nhưng không gọi → người dân không được báo)
+    emit('hoso.rejected', {
+      io,
+      accountId: hoso.account_id,
+      hosoId: hoso.hoso_id,
+      reason: reason.trim()
+    });
+
     res.status(200).json({ message: 'Từ chối hồ sơ thành công.' });
 
   } catch (error) {
